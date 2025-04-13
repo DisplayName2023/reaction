@@ -27,24 +27,6 @@ struct RegGuard {
     }
 };
 
-// Trait to determine the expression type for DataSource
-template <typename... Args>
-struct SourceTraits {
-    using Expr = Expression<Args...>;
-};
-
-// Specialization of SourceTraits for DataSource with a single type
-template <typename TriggerPolicy, typename InvalidStrategy, typename Type>
-struct SourceTraits<DataSource<TriggerPolicy, InvalidStrategy, Type>> {
-    using Expr = Expression<TriggerPolicy, Type>;
-};
-
-// Specialization of SourceTraits for DataSource with multiple types
-template <typename TriggerPolicy, typename InvalidStrategy, typename Type, typename... Args>
-struct SourceTraits<DataSource<TriggerPolicy, InvalidStrategy, Type, Args...>> {
-    using Expr = Expression<TriggerPolicy, Type, Args...>;
-};
-
 template <typename DataType>
 class DataWeakRef {
 public:
@@ -207,11 +189,10 @@ private:
 
 // DataSource class template that handles the value, observers, and invalidation strategies
 template <typename TriggerPolicy, typename InvalidStrategy, typename Type, typename... Args>
-class DataSource : public SourceTraits<DataSource<TriggerPolicy, InvalidStrategy, Type, Args...>>::Expr,
+class DataSource : public Expression<TriggerPolicy, Type, Args...>,
                    private InvalidStrategy {
 public:
-    // Using the Expr from SourceTraits
-    using Expr = typename SourceTraits<DataSource>::Expr;
+    using Expr = Expression<TriggerPolicy, Type, Args...>;
     using ValueType = typename Expr::ValueType;
     using InvStrategy = InvalidStrategy;
     using Expr::Expr; // Inherit constructors from Expr
