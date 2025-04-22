@@ -7,7 +7,7 @@
 [![TMP](https://img.shields.io/badge/Template-Metaprogramming-orange.svg)](https://en.cppreference.com/w/cpp/language/templates)
 [![MVVM](https://img.shields.io/badge/Pattern-MVVM%2FMVC-9cf.svg)](https://en.wikipedia.org/wiki/Model–view–viewmodel)
 
-A lightweight, header-only reactive programming framework leveraging modern C++20 features for building efficient dataflow applications.
+Reaction is a blazing-fast, modern C++20 header-only reactive framework that brings React/Vue-style dataflow to native C++ – perfect for UI, game logic, and more.
 
 ### 🎯 **Focused on UI Dataflow Management**
 
@@ -24,7 +24,6 @@ A lightweight, header-only reactive programming framework leveraging modern C++2
 ### 🚀 Performance Optimized
 
 - **Zero-cost abstractions** through template metaprogramming
-- **Virtual-Free Design** Pure compile-time polymorphism
 - Minimal runtime overhead with **smart change propagation**
 - Propagation efficiency **at the level of millions per second**
 

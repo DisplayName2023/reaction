@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <vector>
+#include <algorithm>
 #include <variant>
 
 namespace reaction {
@@ -30,7 +31,7 @@ using NodeVariant = std::variant<DataNodePtr, ActionNodePtr>;
 
 struct NodeVariantHash {
     std::size_t operator()(const NodeVariant &node) const {
-        return std::visit([](auto&& ptr) -> std::size_t {
+        return std::visit([](auto &&ptr) -> std::size_t {
             return std::hash<typename std::decay<decltype(ptr)>::type>()(ptr);
         }, node);
     }
@@ -38,16 +39,15 @@ struct NodeVariantHash {
 
 struct NodeVariantEqual {
     bool operator()(const NodeVariant &a, const NodeVariant &b) const {
-        return a.index() == b.index() &&
-        std::visit([](auto &&ptr1, auto &&ptr2) -> bool {
-            using T1 = std::decay_t<decltype(ptr1)>;
-            using T2 = std::decay_t<decltype(ptr2)>;
-            if constexpr (std::is_same_v<T1, T2>) {
-                return ptr1 == ptr2;
-            } else {
-                return false;
-            }
-        }, a, b);
+        return a.index() == b.index() && std::visit([](auto &&ptr1, auto &&ptr2) -> bool {
+                   using T1 = std::decay_t<decltype(ptr1)>;
+                   using T2 = std::decay_t<decltype(ptr2)>;
+                   if constexpr (std::is_same_v<T1, T2>) {
+                       return ptr1 == ptr2;
+                   } else {
+                       return false;
+                   }
+               }, a, b);
     }
 };
 
@@ -162,7 +162,7 @@ public:
         cleanupDependencies(node);
         m_dependents[node].clear();
         if (m_repeatDependencies.find(node) != m_repeatDependencies.end()) {
-            for (auto &root: m_repeatDependencies[node]) {
+            for (auto &root : m_repeatDependencies[node]) {
                 root->deleteWait(node);
             }
         }
@@ -230,7 +230,7 @@ private:
         m_observers.erase(node);
 
         if (m_repeatDependencies.find(node) != m_repeatDependencies.end()) {
-            for (auto &root: m_repeatDependencies[node]) {
+            for (auto &root : m_repeatDependencies[node]) {
                 root->deleteWait(node);
             }
         }
@@ -294,7 +294,7 @@ private:
     }
 
     // Check if a node is part of a target's dependencies
-    template<NodeCC SrcType, NodeCC NodeType>
+    template <NodeCC SrcType, NodeCC NodeType>
     bool checkDependency(std::shared_ptr<SrcType> source, std::shared_ptr<NodeType> node, const std::unordered_set<DataNodePtr> &targetDependencies, std::unordered_set<DataNodePtr> &visited) {
         if (visited.count(node)) return false;
         visited.insert(node);
@@ -345,7 +345,8 @@ public:
         return this->shared_from_this();
     }
 
-    virtual void valueChanged([[maybe_unused]]bool changed) {}
+    virtual void valueChanged([[maybe_unused]] bool changed) {
+    }
 
 protected:
     bool updateObservers(auto &&...args) {
@@ -363,16 +364,10 @@ protected:
     }
 
     void notifyObservers(bool changed) {
-
         for (auto &observer : m_waitObservers) {
             g_wait_list.insert(observer);
         }
 
-        if constexpr (!std::is_same_v<Derived, ObserverFieldNode>) {
-            if (g_wait_list.find(getShared()) != g_wait_list.end()) {
-                return;
-            }
-        }
         for (auto observer : m_observers) {
             if (g_wait_list.find(observer) == g_wait_list.end()) {
                 std::visit([&](auto &&ob) {
@@ -381,14 +376,12 @@ protected:
             }
         }
 
-        for (auto observer : m_waitObservers) {
-            g_wait_list.erase(observer);
-        }
+        if (!m_waitObservers.empty()) {
+            for (auto&& observer : m_waitObservers) {
+                std::visit([&](auto&& ob) { ob->valueChanged(changed); }, observer);
+                g_wait_list.erase(observer);
 
-        for (auto &observer : m_waitObservers) {
-            std::visit([&](auto &&ob) {
-                ob->valueChanged(changed);
-            }, observer);
+            }
         }
     }
 

@@ -303,8 +303,7 @@ public:
         this->updateValue(std::forward<T>(t));
         if constexpr (CompareCC<ValueType>) {
             this->notifyObservers(this->getValue() != t);
-        }
-        else {
+        } else {
             this->notifyObservers(true);
         }
     }
