@@ -8,11 +8,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(MSVC)
     add_compile_options(/W4 /GR-)
 else()
-    add_compile_options(-Wall -Wextra -pedantic -fno-rtti -std=c++20)
+    add_compile_options(-Wall -Wextra -pedantic -fno-rtti -std=c++2a)
 endif()
 
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
 endif()
 
 add_library(${PROJECT_NAME} INTERFACE)

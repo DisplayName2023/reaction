@@ -10,7 +10,7 @@
 #include <string>
 
 // Person class with reactive fields for name and age
-class Person : public reaction::FieldStructBase {
+class Person : public reaction::FieldBase {
 public:
     // Constructor initializing person data
     Person(const std::string &name, int age) :

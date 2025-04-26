@@ -3,14 +3,29 @@
 [![C++20](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Header-only](https://img.shields.io/badge/Header--only-Yes-green.svg)](https://en.wikipedia.org/wiki/Header-only)
 [![CMake](https://img.shields.io/badge/CMake-3.15+-blueviolet.svg)](https://cmake.org)
+[![ReactiveX](https://img.shields.io/badge/Reactive-Programming-ff69b4.svg)](https://reactivex.io)
+[![TMP](https://img.shields.io/badge/Template-Metaprogramming-orange.svg)](https://en.cppreference.com/w/cpp/language/templates)
+[![MVVM](https://img.shields.io/badge/Pattern-MVVM%2FMVC-9cf.svg)](https://en.wikipedia.org/wiki/Model–view–viewmodel)
 
-A lightweight, header-only reactive programming framework leveraging modern C++20 features for building efficient dataflow applications.
+Reaction is a blazing-fast, modern C++20 header-only reactive framework that brings React/Vue-style dataflow to native C++ – perfect for UI, game logic, and more.
+
+### 🎯 **Focused on UI Dataflow Management**
+
+- **Pure Data-Driven Updates** – Optimized for **one-way binding** (Model → View)
+- **No Event Emitters** – Changes propagate **only through data dependencies**, avoiding callback hell
+- **Predictable Updates** – Strict **top-down dataflow** like React/Vue, but with zero runtime overhead
+
+#### **Ideal For:**
+✅ **MVVM/MVC UI Architectures**
+✅ **Game Object Properties**
+✅ **Form Validation Chains**
+✅ **Animation State Machines**
 
 ### 🚀 Performance Optimized
 
 - **Zero-cost abstractions** through template metaprogramming
-- **Compile-time dependency graph** optimization
 - Minimal runtime overhead with **smart change propagation**
+- Propagation efficiency **at the level of millions per second**
 
 ### 🔗 Intelligent Dependency Management
 
@@ -18,10 +33,11 @@ A lightweight, header-only reactive programming framework leveraging modern C++2
 - Fine-grained **change propagation control**
 - Configurable **caching strategies**
 
-### 🛡️ Type Safety Guarantees
+### 🛡️ Safety Guarantees
 
 - Compile-time **type checking** with C++20 concepts
 - Safe **value semantics** throughout the framework
+- Framework manages object lifetime internally
 
 ### 🧩 Extensible Design
 
@@ -41,9 +57,9 @@ To build and install the `reaction` reactive framework, follow the steps below:
 
 ```bash
 git clone https://github.com/lumia431/reaction.git && cd reaction
-cmake -B build && cd build
-cmake --build .
-cmake --install . --prefix /your/install/path
+cmake -B build
+cmake --build build/
+cmake --install build/ --prefix /your/install/path
 ```
 
 After installation, you can include and link against reaction in your own CMake-based project:
@@ -59,34 +75,35 @@ target_link_libraries(your_target PRIVATE reaction)
 #include <reaction/reaction.h>
 #include <iostream>
 #include <iomanip>
+#include <cmath>
 
 int main() {
     using namespace reaction;
 
-    // 1. Create reactive variables
-    auto buyPrice = var(100.0);      // Purchase price
-    auto currentPrice = var(105.0);  // Market price
+    // 1. Reactive variables for stock prices
+    auto buyPrice = var(100.0);      // Price at which stock was bought
+    auto currentPrice = var(105.0);  // Current market price
 
-    // 2. Derived calculations
-    auto profit = calc([=] {
+    // 2. Use 'calc' to compute profit or loss amount
+    auto profit = calc([=]() {
         return currentPrice() - buyPrice();
     });
 
-    // 3. Expressive formulas
-    auto profitPercent = expr((currentPrice - buyPrice) / buyPrice * 100);
+    // 3. Use 'expr' to compute percentage gain/loss
+    auto profitPercent = expr(std::abs(currentPrice - buyPrice) / buyPrice * 100);
 
-    // 4. Automatic reactions
-    auto logger = action([=] {
+    // 4. Use 'action' to print the log whenever values change
+    auto logger = action([=]() {
         std::cout << std::fixed << std::setprecision(2);
-        std::cout << "[Stock Update] Current: $" << currentPrice()
-                  << " | Profit: $" << profit()
+        std::cout << "[Stock Update] Current Price: $" << currentPrice()
+                  << ", Profit: $" << profit()
                   << " (" << profitPercent() << "%)" << std::endl;
     });
 
-    // Simulate market changes
-    currentPrice.value(110.0);  // Price increase
-    currentPrice.value(95.0);   // Price drop
-    *buyPrice = 90.0;           // Adjust basis
+    // Simulate price changes
+    currentPrice.value(110.0).value(95.0);  // Stock price increases
+    *buyPrice = 90.0;                       // Buy price adjusted
+
     return 0;
 }
 ```
@@ -187,7 +204,7 @@ For complex types with reactive fields allow you to define struct-like variables
 Here's an example of a `PersonField` class:
 
 ```cpp
-class PersonField : public reaction::FieldStructBase {
+class PersonField : public reaction::FieldBase {
 public:
     PersonField(std::string name, int age):
         m_name(reaction::field(this, name)),
@@ -213,7 +230,18 @@ p->setName("Jackson"); // Action Trigger
 p->setAge(28);         // Action Trigger
 ```
 
-#### 6. Resetting Nodes and Dependencies
+#### 6. Copy and move semantics support
+
+```cpp
+auto a = reaction::var(1);
+auto b = reaction::var(3.14);
+auto ds = reaction::calc([]() { return a() + b(); });
+auto ds_copy = ds;
+auto ds_move = std::move(ds);
+EXPECT_FALSE(static_cast<bool>(ds));
+```
+
+#### 7. Resetting Nodes and Dependencies
 
 The reaction framework allows you to **reset a computation node** by replacing its computation function.
 This mechanism is useful when the result needs to be recalculated using a different logic or different dependencies after the node has been initially created.
@@ -227,11 +255,18 @@ TEST(TestReset, ReactionTest) {
     auto a = reaction::var(1);
     auto b = reaction::var(std::string{"2"});
     auto ds = reaction::calc([]() { return std::to_string(a()); });
-    ds.set([=]() { return b() + "set"; });
+    auto ret = ds.set([=]() { return b() + "set"; });
+    EXPECT_EQ(ret, reaction::ReactionError::NoErr);
+
+    ret = ddds.set([=]() { return a(); });
+    EXPECT_EQ(ret, reaction::ReactionError::ReturnTypeErr);
+
+    ret = ddds.set([=]() { return ds(); });
+    EXPECT_EQ(ret, reaction::ReactionError::CycleDepErr);
 }
 ```
 
-#### 7. Trigger Mode
+#### 8. Trigger Mode
 
 The `reaction` framework supports various triggering mode to control when reactive computations are re-evaluated. This example demonstrates three mode:
 
@@ -244,7 +279,7 @@ The trigger Mode can be specified by the type parameter
 ```cpp
 using namespace reaction;
 auto stockPrice = var(100.0);
-auto profit = expr<ValueChangeTrigger>(stockPrice() - 100.0);
+auto profit = expr<ChangedTrigger>(stockPrice() - 100.0);
 auto assignAction = action([=]() {  // defalut AlwaysTrigger
     std::cout << "Checky assign, price = " << stockPrice() <<'\n';
 });
@@ -273,7 +308,7 @@ auto a = var(1);
 auto b = expr<MyTrigger>(a + 1);
 ```
 
-#### 8. Invalid Strategies
+#### 9. Invalid Strategies
 
 In the `reaction` framework, all data sources **obtained by users are actually in the form of weak references**, and their actual memory is managed **in the observer map**.
 Users can manually call the **close** method, so that all dependent data sources will also be closed.
@@ -329,7 +364,7 @@ Below is a concise example that illustrates all three strategies:
     auto a = var(1);
     auto b = calc([]() { return a(); });
     {
-        auto temp = calc<AlwaysTrigger, KeepCalcStrategy>([]() { return a(); }); // default is DirectFailureStrategy
+        auto temp = calc<AlwaysTrigger, LastValStrategy>([]() { return a(); }); // default is DirectFailureStrategy
         b.set([]() { return temp(); });
     }
     // temp lifecycle ends, b use its last val to calculate.
@@ -351,3 +386,22 @@ struct MyStrategy {
 auto a = var(1);
 auto b = expr<AlwaysTrigger, MyStrategy>(a + 1);
 ```
+
+## **Contributions Welcome!**
+
+We welcome all forms of contributions to make **Reaction** even better:
+
+### **How to Contribute**
+1. **Report Issues**
+   🐛 Found a bug? [Open an Issue](https://github.com/lumia431/reaction/issues) with detailed reproduction steps.
+
+2. **Suggest Features**
+   💡 Have an idea? Propose new features through GitHub Discussions.
+
+3. **Submit Pull Requests**
+   👩💻 Follow our workflow:
+   ```bash
+   git clone https://github.com/lumia431/reaction.git
+   cd reaction
+   # Create a feature branch (feat/xxx or fix/xxx)
+   # Submit PR against `dev` branch

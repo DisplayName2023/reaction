@@ -21,6 +21,12 @@
 
 namespace reaction {
 
+enum class ReactionError{
+    CycleDepErr = -2,
+    ReturnTypeErr,
+    NoErr
+};
+
 class Log {
 public:
     enum class Level {

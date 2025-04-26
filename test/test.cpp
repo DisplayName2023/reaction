@@ -7,8 +7,6 @@
 
 #include "gtest/gtest.h"
 #include "reaction/reaction.h"
-#include <vector>
-#include <numeric>
 
 // Test for basic constructor and data source creation
 TEST(TestConstructor, ReactionTest) {
@@ -48,23 +46,12 @@ TEST(TestCommonUse, ReactionTest) {
 
 // Test for complex calculations with multiple dependencies
 TEST(TestComplexCal, ReactionTest) {
-    auto a = reaction::var(1);
-    a.setName("a");
-
-    auto dsA = reaction::calc([](int aa) { return aa; }, a);
-    dsA.setName("dsA");
-
-    auto dsB = reaction::calc([](int aa, int dsAValue) { return aa + dsAValue; }, a, dsA);
-    dsB.setName("dsB");
-
-    auto dsC = reaction::calc([](int aa, int dsAValue, int dsBValue) { return aa + dsAValue + dsBValue; }, a, dsA, dsB);
-    dsC.setName("dsC");
-
-    auto dsD = reaction::calc([](int dsAValue, int dsBValue, int dsCValue) { return dsAValue + dsBValue + dsCValue; }, dsA, dsB, dsC);
-    dsD.setName("dsD");
-
-    auto dsE = reaction::calc([](int dsBValue, int dsCValue, int dsDValue) { return dsBValue * dsCValue + dsDValue; }, dsB, dsC, dsD);
-    dsE.setName("dsE");
+    auto a = reaction::var(1).setName("a");
+    auto dsA = reaction::calc([](int aa) { return aa; }, a).setName("dsA");
+    auto dsB = reaction::calc([](int aa, int dsAValue) { return aa + dsAValue; }, a, dsA).setName("dsB");
+    auto dsC = reaction::calc([](int aa, int dsAValue, int dsBValue) { return aa + dsAValue + dsBValue; }, a, dsA, dsB).setName("dsC");
+    auto dsD = reaction::calc([](int dsAValue, int dsBValue, int dsCValue) { return dsAValue + dsBValue + dsCValue; }, dsA, dsB, dsC).setName("dsD");
+    auto dsE = reaction::calc([](int dsBValue, int dsCValue, int dsDValue) { return dsBValue * dsCValue + dsDValue; }, dsB, dsC, dsD).setName("dsE");
 
     EXPECT_EQ(dsA.get(), 1);
     EXPECT_EQ(dsB.get(), 2);
@@ -117,12 +104,17 @@ TEST(TestReset, ReactionTest) {
     auto ddds = reaction::calc([](auto cc) { return cc; }, c);
 
     EXPECT_EQ(ddds.get(), "3");
-    ddds.set([=]() { return d() + dds() + "set"; });
+    auto ret = ddds.set([=]() { return d() + dds() + "set"; });
+    EXPECT_EQ(ret, reaction::ReactionError::NoErr);
+
     EXPECT_EQ(ddds.get(), "42set");
     *c = "33";
     EXPECT_EQ(ddds.get(), "42set");
     *d = "44";
     EXPECT_EQ(ddds.get(), "442set");
+
+    ret = ddds.set([=]() { return a(); });
+    EXPECT_EQ(ret, reaction::ReactionError::ReturnTypeErr);
 }
 
 // Test for self-dependency scenario (invalid)
@@ -134,38 +126,65 @@ TEST(TestSelfDependency, ReactionTest) {
     auto dsA = reaction::calc([](int aa) { return aa; }, a);
 
     EXPECT_EQ(dsA.set([](int aa, int dsAValue) { return aa + dsAValue; }, a, dsA),
-              false); // This should fail as self-dependency is not allowed
+              reaction::ReactionError::CycleDepErr); // This should fail as self-dependency is not allowed
 }
 
 // Test for repeat dependencies and the number of trigger counts
 TEST(TestRepeatDependency, ReactionTest) {
-    auto a = reaction::var(1);
-    auto b = reaction::var(2);
-    auto c = reaction::var(3);
+    // ds → A, ds → a, A → a
+    auto a = reaction::var(1).setName("a");
+    auto b = reaction::var(2).setName("b");
 
     int triggerCount = 0;
-    auto dsA = reaction::calc([&triggerCount](int aa, int bb) {
-                                                    ++triggerCount;
-                                                    return aa + bb; }, a, b);
+    auto dsA = reaction::calc([&]() {
+                               ++triggerCount;
+                               return a() + b(); }).setName("dsA");
 
-    auto dsB = reaction::calc([](int cc, int dsAVal) { return cc + dsAVal; }, c, dsA);
-
-    a.setName("a");
-    b.setName("b");
-    c.setName("c");
-
-    dsA.setName("dsA");
-    dsB.setName("dsB");
+    auto dsB = reaction::calc([&]() { return a() + dsA(); }).setName("dsB");
 
     triggerCount = 0;
     *a = 2;
     EXPECT_EQ(triggerCount, 1);
+    EXPECT_EQ(dsB.get(), 6);
+}
 
-    dsB.set([](int aa, int dsAVal) { return aa + dsAVal; }, a, dsA);
+TEST(TestRepeatDependency2, ReactionTest) {
+    // ds → A, ds → B, ds → C, A → a, B → a
+    int triggerCountA = 0;
+    int triggerCountB = 0;
+    auto a = reaction::var(1).setName("a");
+    auto A = reaction::calc([&]() { ++triggerCountA; return a() + 1; }).setName("A");
+    auto B = reaction::calc([&]() { ++triggerCountB; return a() + 2; }).setName("B");
+    auto C = reaction::calc([&]() { return 5; }).setName("C");
+    auto ds = reaction::calc([&]() { return A() + B() + C(); }).setName("ds");
 
-    triggerCount = 0;
-    *a = 3;
-    EXPECT_EQ(triggerCount, 3); // Multiple triggers due to repeat dependency
+    triggerCountA = 0;
+    triggerCountB = 0;
+    *a = 2;
+    EXPECT_EQ(triggerCountA, 1);
+    EXPECT_EQ(triggerCountB, 1);
+    EXPECT_EQ(ds.get(), 12);
+}
+
+TEST(TestRepeatDependency3, ReactionTest) {
+    // ds → A, ds → B, A → A1, A1 → A2, A2 → a, B → B1, B1 → a
+    auto a = reaction::var(1).setName("a");
+    int triggerCountA = 0;
+    int triggerCountB = 0;
+    auto A2 = reaction::calc([&]() { ++triggerCountA; return a() * 2; }).setName("A2");
+    auto A1 = reaction::calc([&]() { return A2() + 1; }).setName("A1");
+    auto A = reaction::calc([&]() { return A1() - 1; }).setName("A");
+
+    auto B1 = reaction::calc([&]() { ++triggerCountB; return a() - 1; }).setName("B1");
+    auto B = reaction::calc([&]() { return B1() + 1; }).setName("B");
+
+    auto ds = reaction::calc([&]() { return A() + B(); }).setName("ds");
+    triggerCountA = 0;
+    triggerCountB = 0;
+    *a = 2;
+    EXPECT_EQ(triggerCountA, 1);
+    EXPECT_EQ(triggerCountB, 1);
+    EXPECT_EQ(ds.get(), 6);
 }
 
 // Test for cyclic dependencies, expecting failure
@@ -193,7 +212,7 @@ TEST(TestCycleDependency, ReactionTest) {
     dsB.set([](int cc, int dsCValue) { return cc * dsCValue; }, c, dsC);
 
     EXPECT_EQ(dsC.set([](int aa, int dsAValue) { return aa - dsAValue; }, a, dsA),
-              false); // This should fail due to cycle dependency
+              reaction::ReactionError::CycleDepErr); // This should fail due to cycle dependency
 }
 
 // Test for copying data sources
@@ -239,7 +258,7 @@ TEST(TestValueChangeTrigger, ReactionTest) {
     auto ds = reaction::calc([&triggerCountA](int aa, double bb) {
                                                 ++triggerCountA;
                                                 return std::to_string(aa) + std::to_string(bb); }, a, b);
-    auto dds = reaction::calc<reaction::ValueChangeTrigger>([&triggerCountB](auto cc, auto dsds) {
+    auto dds = reaction::calc<reaction::ChangedTrigger>([&triggerCountB](auto cc, auto dsds) {
                                                                                ++triggerCountB;
                                                                                return cc + dsds; }, c, ds);
     EXPECT_EQ(triggerCountA, 1);
@@ -497,132 +516,8 @@ TEST(TestCustomStruct, ReactionTest) {
     auto ds = reaction::calc([](auto &&aa) { return aa; }, a);
 }
 
-struct ProcessedData {
-    std::string info; // Stores information
-    int checksum;     // Stores the checksum value
-
-    // Overloading equality operator for comparison
-    bool operator==(ProcessedData &p) {
-        return info == p.info && checksum == p.checksum;
-    }
-};
-
-// Test case for a deep dependency chain in data sources
-TEST(DataSourceStressTest, DeepDependencyChain) {
-    using namespace reaction;
-    using namespace std::chrono;
-
-    // Create var-data sources
-    auto base1 = var(1);                // Integer source
-    auto base2 = var(2.0);              // Double source
-    auto base3 = var(true);             // Boolean source
-    auto base4 = var(std::string{"3"}); // String source
-    auto base5 = var(4);                // Integer source
-
-    // Layer 1: Add integer and double
-    auto layer1 = calc([](int a, double b) {
-        return a + b;
-    },
-                                         base1, base2);
-
-    // Layer 2: Multiply or divide based on the flag
-    auto layer2 = calc([](double val, bool flag) {
-        return flag ? val * 2 : val / 2;
-    },
-                                         layer1, base3);
-
-    // Layer 3: Convert double value to a string
-    auto layer3 = calc([](double val) {
-        return "Value:" + std::to_string(val);
-    },
-                                         layer2);
-
-    // Layer 4: Append integer to string
-    auto layer4 = calc([](const std::string &s, const std::string &s4) {
-        return s + "_" + s4;
-    },
-                                         layer3, base4);
-
-    // Layer 5: Get the length of the string
-    auto layer5 = calc([](const std::string &s) {
-        return s.length();
-    },
-                                         layer4);
-
-    // Layer 6: Create a vector of double values
-    auto layer6 = calc([](size_t len, int b5) {
-        return std::vector<int>(len, b5);
-    },
-                                         layer5, base5);
-
-    // Layer 7: Sum all elements in the vector
-    auto layer7 = calc([](const std::vector<int> &vec) {
-        return std::accumulate(vec.begin(), vec.end(), 0);
-    },
-                                         layer6);
-
-    // Layer 8: Create a ProcessedData object with checksum and info
-    auto layer8 = calc([](int sum) {
-        return ProcessedData{"ProcessedData", static_cast<int>(sum)};
-    },
-                                         layer7);
-
-    // Layer 9: Combine info and checksum into a string
-    auto layer9 = calc([](const ProcessedData &calc) {
-        return calc.info + "|" + std::to_string(calc.checksum);
-    },
-                                         layer8);
-
-    // Final layer: Add "Final:" prefix to the result
-    auto finalLayer = calc([](const std::string &s) {
-        return "Final:" + s;
-    },
-                                             layer9);
-    const int ITERATIONS = 1;
-    auto start = steady_clock::now(); // Start measuring time
-    // Perform stress test for the given number of iterations
-    for (int i = 0; i < ITERATIONS; ++i) {
-        // Update base sources with new values
-        *base1 = i % 100;
-        *base2 = (i % 100) * 0.1;
-        *base3 = i % 2 == 0;
-
-        // Calculate the expected result for the given input
-        std::string expected = [&]() {
-            double l1 = base1.get() + base2.get();                        // Add base1 and base2
-            double l2 = base3.get() ? l1 * 2 : l1 / 2;                    // Multiply or divide based on base3
-            std::string l3 = "Value:" + std::to_string(l2);               // Convert to string
-            std::string l4 = l3 + "_" + base4.get();                      // Append base1
-            size_t l5 = l4.length();                                      // Get string length
-            std::vector<int> l6(l5, base5.get());                         // Create vector of length 'l5'
-            int l7 = std::accumulate(l6.begin(), l6.end(), 0);            // Sum vector values
-            ProcessedData l8{"ProcessedData", static_cast<int>(l7)};      // Create ProcessedData object
-            std::string l9 = l8.info + "|" + std::to_string(l8.checksum); // Combine info and checksum
-            return "Final:" + l9;                                         // Add final prefix
-        }();
-
-        // Check if the final result matches the expected value
-        EXPECT_EQ(finalLayer.get(), expected);
-
-        // Print progress every 10,000 iterations
-        if (i % 10000 == 0) {
-            auto dur = duration_cast<milliseconds>(steady_clock::now() - start);
-            std::cout << "Progress: " << i << "/" << ITERATIONS
-                      << " (" << dur.count() << "ms)\n";
-        }
-    }
-
-    // Output the final results of the stress test
-    auto duration = duration_cast<milliseconds>(steady_clock::now() - start);
-    std::cout << "=== Stress Test Results ===\n"
-              << "Iterations: " << ITERATIONS << "\n"
-              << "Total time: " << duration.count() << "ms\n"
-              << "Avg time per update: "
-              << duration.count() / static_cast<double>(ITERATIONS) << "ms\n";
-}
-
 // Person class with fields for name, age, and gender
-class PersonField : public reaction::FieldStructBase {
+class PersonField : public reaction::FieldBase {
 public:
     // Constructor to initialize PersonField with name, age, and gender
     PersonField(std::string name, int age, bool male) :

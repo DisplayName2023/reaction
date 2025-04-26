@@ -17,9 +17,9 @@ using Field = DataWeakRef<DataSource<AlwaysTrigger, FieldStrategy, FieldIdentity
 
 // Function to create a Field DataSource
 template <typename SourceType>
-auto field(FieldStructBase *meta, SourceType &&value) {
+auto field(FieldBase *obj, SourceType &&value) {
     auto ptr = std::make_shared<DataSource<AlwaysTrigger, FieldStrategy, FieldIdentity<std::decay_t<SourceType>>>>
-               (FieldIdentity<std::decay_t<SourceType>>{meta, std::forward<SourceType>(value)});
+               (FieldIdentity<std::decay_t<SourceType>>{obj, std::forward<SourceType>(value)});
     FieldGraph::getInstance().addNode(ptr);
     return DataWeakRef{ptr.get()};
 }
@@ -54,7 +54,7 @@ auto expr(OpExpr &&opExpr) {
 // Function to create a variable DataSource
 template <TriggerCC TriggerPolicy = AlwaysTrigger, InvalidCC InvalidStrategy = DirectCloseStrategy, typename Fun, typename... Args>
 auto calc(Fun &&fun, Args &&...args) {
-    auto ptr = std::make_shared<DataSource<TriggerPolicy, InvalidStrategy, Fun, typename is_data_weak_ref<std::decay_t<Args>>::Type...>>();
+    auto ptr = std::make_shared<DataSource<TriggerPolicy, InvalidStrategy, std::decay_t<Fun>, typename is_data_weak_ref<std::decay_t<Args>>::Type...>>();
     ObserverGraph::getInstance().addNode(ptr);
     ptr->set(std::forward<Fun>(fun), std::forward<Args>(args)...);
     return DataWeakRef{ptr.get()};

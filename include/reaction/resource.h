@@ -14,22 +14,22 @@
 namespace reaction {
 
 // Base struct for fields (empty base class)
-struct FieldStructBase {
-    ~FieldStructBase() {
-        FieldGraph::getInstance().deleteMeta(this);
+struct FieldBase {
+    ~FieldBase() {
+        FieldGraph::getInstance().deleteObj(this);
     }
 };
 
-// Struct to hold metadata and value for a field identity
+// Struct to hold Objdata and value for a field identity
 template <typename Type>
 struct FieldIdentity {
-    // Constructor to initialize metadata pointer and value
+    // Constructor to initialize Objdata pointer and value
     template <typename T>
-    FieldIdentity(FieldStructBase *ptr, T &&t) :
-        metaPtr(ptr), value(std::forward<T>(t)) {
+    FieldIdentity(FieldBase *ptr, T &&t) :
+        ObjPtr(ptr), value(std::forward<T>(t)) {
     }
 
-    FieldStructBase *metaPtr; // Pointer to metadata
+    FieldBase *ObjPtr; // Pointer to Objdata
     Type value;               // Field value
 };
 
@@ -122,7 +122,7 @@ public:
     template <typename Type>
     Resource(Type &&identity) :
         ResourceBase<SimpleExpr, T>(identity.value) {
-        FieldGraph::getInstance().addField(identity.metaPtr, static_cast<ObserverFieldNode *>(this));
+        FieldGraph::getInstance().addObj(identity.ObjPtr, static_cast<ObserverFieldNode *>(this));
     }
 };
 

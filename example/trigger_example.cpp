@@ -21,7 +21,7 @@ void triggerExample() {
 
     // Value change trigger example
     int valueChangeCount = 0;
-    auto valueChangeDS = reaction::calc<reaction::ValueChangeTrigger>(
+    auto valueChangeDS = reaction::calc<reaction::ChangedTrigger>(
         [&valueChangeCount](double price) {
             valueChangeCount++;
             return price * 1.1; // Calculate 10% price increase
